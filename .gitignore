@@ -25,3 +25,4 @@ symfony.lock
 /phpunit.xml
 .phpunit.result.cache
 ###< phpunit/phpunit ###
+/.env
