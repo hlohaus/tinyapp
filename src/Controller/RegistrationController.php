@@ -2,7 +2,6 @@
 
 namespace App\Controller;
 
-use Psr\Http\Message\RequestInterface;
 use Shopware\AppBundle\Attribute\ConfirmationRoute;
 use Shopware\AppBundle\Attribute\RegistrationRoute;
 use Shopware\AppBundle\Authentication\RequestVerifier;
@@ -49,13 +48,16 @@ class RegistrationController extends AbstractController
 
 
     #[Route('/delete', methods: ['POST'])]
-    public function delete(RequestInterface $request): JsonResponse
+    public function delete(Request $request): JsonResponse
     {
-        $requestContent = json_decode($request->getBody()->getContents(), true);
+        $requestContent = json_decode($request->getContent(), true);
 
         $shop = $this->shopRepository->getShopFromId($requestContent['shopId']);
 
-        $this->requestVerifier->authenticatePostRequest($request, $shop);
+        $this->requestVerifier->authenticatePostRequest(
+            $this->psrHttpFactory->createRequest($request),
+            $shop
+        );
 
         $this->shopRepository->deleteShop($shop);
 
