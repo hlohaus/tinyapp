@@ -9,6 +9,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class EditorController extends AbstractController
 {
@@ -33,7 +34,7 @@ class EditorController extends AbstractController
                 'iframeUrl' => $this->generateUrl('editor-page', [
                     'entity' => $entity,
                     'entityId' => $id,
-                ]),
+                ], UrlGeneratorInterface::ABSOLUTE_URL),
                 'size' => 'medium',
                 'expand' => true
             ]
