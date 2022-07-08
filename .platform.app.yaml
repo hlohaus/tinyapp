@@ -44,7 +44,7 @@ hooks:
 web:
   locations:
     '/':
-      root: "\"public\""
+      root: "public"
       passthru: "/index.php"
       scripts: true
       expires: -1
