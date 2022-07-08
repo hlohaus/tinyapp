@@ -46,6 +46,8 @@ web:
     '/':
       root: "\"public\""
       passthru: "/index.php"
+      scripts: true
+      expires: -1
 
 dependencies:
   php:
