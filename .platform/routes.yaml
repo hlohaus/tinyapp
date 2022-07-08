@@ -2,3 +2,7 @@
 "https://{default}/":
   type: upstream
   upstream: "app:http"
+
+"https://tinyapp.lohaus.eu/":
+  type: upstream
+  upstream: "app:http"
