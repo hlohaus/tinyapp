@@ -3,7 +3,6 @@
 namespace App\Shop;
 
 use Doctrine\DBAL\Connection;
-use Shopware\AppBundle\Shop\ShopEntity;
 use Shopware\AppBundle\Shop\ShopInterface;
 use Shopware\AppBundle\Shop\ShopRepositoryInterface;
 
@@ -16,6 +15,8 @@ class ShopRepository implements ShopRepositoryInterface
 
     public function createShop(ShopInterface $shop): void
     {
+        $this->deleteShop($shop);
+
         $queryBuilder = $this->connection->createQueryBuilder();
         $queryBuilder
             ->insert('shop')
@@ -36,20 +37,29 @@ class ShopRepository implements ShopRepositoryInterface
     public function getShopFromId(string $shopId): ShopInterface
     {
         $queryBuilder = $this->connection->createQueryBuilder();
-        $queryBuilder->select('shop_id', 'shop_url', 'shop_secret', 'api_key', 'secret_key')
+        $queryBuilder->select('*')
             ->from('shop')
             ->where('shop_id = :shop_id')
             ->setParameter('shop_id', $shopId);
 
         $shop = $queryBuilder->execute()->fetchAssociative();
 
-        return new ShopEntity(
+        $shop['shop_url'] = str_replace('localhost', 'freudenberg', $shop['shop_url']);
+
+        $result = new ShopEntity(
             $shop['shop_id'],
             $shop['shop_url'],
             $shop['shop_secret'],
             $shop['api_key'],
-            $shop['secret_key'],
+            $shop['secret_key']
         );
+
+        if (isset($shop['access_token'])) {
+            $result->setAccessToken($shop['access_token']);
+            $result->setTokenExpiresIn(new \DateTime($shop['token_expires_in']));
+        }
+
+        return $result;
     }
 
     public function updateShop(ShopInterface $shop): void
@@ -77,6 +87,21 @@ class ShopRepository implements ShopRepositoryInterface
         $queryBuilder->delete('shop')
             ->where('shop_id = :shop_id')
             ->setParameter('shop_id', $shop->getId());
+
+        $queryBuilder->execute();
+    }
+
+    public function saveAccessToken(ShopEntity $shop): void
+    {
+        $queryBuilder = $this->connection->createQueryBuilder();
+        $queryBuilder
+            ->update('shop')
+            ->set('access_token', ':access_token')
+            ->set('token_expires_in', ':token_expires_in')
+            ->where('shop_id = :shop_id')
+            ->setParameter('shop_id', $shop->getId())
+            ->setParameter('access_token', $shop->getAccessToken())
+            ->setParameter('token_expires_in', $shop->getTokenExpiresIn()->format('Y-m-d H:i:s'));
 
         $queryBuilder->execute();
     }

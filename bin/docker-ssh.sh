@@ -1,0 +1,1 @@
+docker exec -it tinyapp_app_1 "/bin/sh"

@@ -27,6 +27,9 @@ services:
     Shopware\AppBundle\Shop\ShopRepositoryInterface:
       class: App\Shop\ShopRepository
 
+    GuzzleHttp\ClientInterface:
+      class: GuzzleHttp\Client
+
     # Psr7 Factory Services
     GuzzleHttp\Psr7\HttpFactory:
     Psr\Http\Message\ServerRequestFactoryInterface:

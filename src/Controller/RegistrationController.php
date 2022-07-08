@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use Shopware\AppBundle\Attribute\ConfirmationRoute;
 use Shopware\AppBundle\Attribute\RegistrationRoute;
+use Symfony\Component\Routing\Annotation\Route;
 use Shopware\AppBundle\Registration\RegistrationService;
 use Symfony\Bridge\PsrHttpMessage\HttpMessageFactoryInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -41,4 +42,10 @@ class RegistrationController extends AbstractController
         return new JsonResponse(null, Response::HTTP_NO_CONTENT);
     }
 
+
+    #[Route('/delete', methods: ['POST'])]
+    public function delete(Request $request): JsonResponse
+    {
+        return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+    }
 }

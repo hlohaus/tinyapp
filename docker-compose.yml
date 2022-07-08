@@ -1,18 +1,20 @@
-version: '3.8'
+version: '3.7'
 
 services:
-  shopware:
-    image: dockware/play:latest
-    volumes:
-      - ./tests/manifest.xml:/var/www/html/custom/apps/AppTemplate/manifest.xml:ro
-
   app:
-    image: shopware/development:8.0-composer-2
+    hostname: tinyapp
+    image: shopware/development:8.1-composer-2
     volumes:
-      - ./:/app:rw
+      - ./:/app/
+    ports:
+      - 80:80
+    networks:
+      - app_net
 
   mysql:
     image: mysql:8
+    ports:
+      - 3308:3306
     environment:
       MYSQL_DATABASE: apptemplate
       MYSQL_USER: app
@@ -21,3 +23,8 @@ services:
 
   wait-for-it:
     image: blablalines/wait:2.6.0-slim
+
+networks:
+  app_net:
+    external:
+      name: app_net

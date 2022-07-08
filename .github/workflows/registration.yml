@@ -23,6 +23,3 @@ jobs:
 
       - name: Run migrations
         run: 'docker-compose exec -T app php bin/console doctrine:migrations:migrate'
-
-      - name: Install app
-        run: 'docker-compose exec -T shopware php bin/console app:install AppTemplate'
