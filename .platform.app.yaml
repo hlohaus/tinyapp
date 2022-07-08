@@ -36,7 +36,8 @@ relationships:
 
 hooks:
   build: |
-    set -e
+    set -e |
+    touch .env
   deploy: |
     set -e
 
