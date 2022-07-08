@@ -30,10 +30,10 @@ class EditorController extends AbstractController
         $response = new JsonResponse([
             'actionType' => 'openModal',
             'payload' => [
-                'iframeUrl' => 'http://localhost/editor-page?' . http_build_query([
+                'iframeUrl' => $this->generateUrl('editor-page', [
                     'entity' => $entity,
                     'entityId' => $id,
-                ]), //$this->generateUrl('editor-page'),
+                ]),
                 'size' => 'medium',
                 'expand' => true
             ]
