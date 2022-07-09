@@ -9,7 +9,6 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class EditorController extends AbstractController
 {
@@ -31,17 +30,16 @@ class EditorController extends AbstractController
         $response = new JsonResponse([
             'actionType' => 'openModal',
             'payload' => [
-                'iframeUrl' => $this->generateUrl('editor-page', [
+                'iframeUrl' => $request->get('shop-url') . '/storefront/script/editor-page?' . http_build_query([
                     'entity' => $entity,
                     'entityId' => $id,
-                ], UrlGeneratorInterface::ABSOLUTE_URL),
+                ]), //$this->generateUrl('editor-page'),
                 'size' => 'medium',
                 'expand' => true
             ]
         ]);
 
-        $secret = $shop->getShopSecret();
-        $hmac = hash_hmac('sha256', $response->getContent(), $secret);
+        $hmac = hash_hmac('sha256', $response->getContent(), $shop->getShopSecret());
         $response->headers->set('shopware-app-signature', $hmac);
 
         return $response;
@@ -51,22 +49,24 @@ class EditorController extends AbstractController
     public function editorPage(Request $request): Response
     {
         $shop = $this->shopRepository->getShopFromId($request->get('shop-id'));
-        $languageId = $request->get('sw-context-language');
-        $product = $this->adminApi->getProduct($shop, $request->get('entityId'), $languageId);
         $language = $request->get('sw-user-language');
         $languageShort = substr($language, 0, 2);
-        $value = htmlspecialchars($product['description'] ?? '');
+        $languageId = $request->get('sw-context-language');
+        $value = $customFieldsHtml = '';
 
-        $customFields = $this->adminApi->getEditorCustomFields($shop, $languageId);
-
-        $customFieldsHtml = '';
-        foreach ($customFields as $customField) {
-            $label = $customField['config']['label'][$language] ?? $customField['config']['label']['en-GB'];
-            $name = $customField['name'];
-            $customFieldsHtml .= ' <h3>' . htmlspecialchars($label) . '</h3>';
-            $customFieldsHtml .= '<textarea name="' . htmlspecialchars($name) . '">'
-                . htmlspecialchars($product['customFields'][$name]?? '')
-                .'</textarea>';
+        try {
+            $product = $this->adminApi->getProduct($shop, $request->get('entityId'), $languageId);
+            $value = htmlspecialchars($product['description'] ?? '');
+            $customFields = $this->adminApi->getEditorCustomFields($shop, $languageId);
+            foreach ($customFields as $customField) {
+                $label = $customField['config']['label'][$language] ?? $customField['config']['label']['en-GB'];
+                $name = $customField['name'];
+                $customFieldsHtml .= ' <h3>' . htmlspecialchars($label) . '</h3>';
+                $customFieldsHtml .= '<textarea name="' . htmlspecialchars($name) . '">'
+                    . htmlspecialchars($product['customFields'][$name]?? '')
+                    .'</textarea>';
+            }
+        } catch (\Throwable $e) {
         }
 
         return new Response(<<<EOT
