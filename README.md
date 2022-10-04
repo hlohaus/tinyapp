@@ -36,3 +36,5 @@ Configure the credentials in the `.env` file
 ```
 
 and you are ready to go to add your custom logic.
+
+![alt text](tinyapp.png "Preview")

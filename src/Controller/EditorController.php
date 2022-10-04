@@ -2,157 +2,122 @@
 
 namespace App\Controller;
 
-use App\WebService\AdminApi;
-use Shopware\AppBundle\Shop\ShopRepositoryInterface;
+use App\Service\AdminRequest;
+use App\Service\SignatureService;
+use App\Service\AdminApi;
+use App\Shop\ShopEntity;
+use GuzzleHttp\Psr7\Uri;
+use Psr\Http\Message\UriInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class EditorController extends AbstractController
 {
+    private const DEFAULT_LANGUAGE = DefaultController::DEFAULT_LANGUAGE;
+
     public function __construct(
-        private ShopRepositoryInterface $shopRepository,
-        private AdminApi $adminApi
-    ) {
+        private AdminApi         $adminApi,
+        private AdminRequest     $adminRequest,
+        private SignatureService $signatureService
+    )
+    {
     }
 
-    #[Route('/edit-product', methods: ['POST'])]
-    public function editProduct(Request $request): JsonResponse
+    #[Route('/open-in-modal', methods: ['POST'])]
+    public function openEditorInModal(Request $request): Response
     {
-        $requestContent = json_decode($request->getContent(), true);
-
-        $id = $requestContent['data']['ids'][0] ?? null;
-        $entity = $requestContent['data']['entity'] ?? null;
-        $shop = $this->shopRepository->getShopFromId($requestContent['source']['shopId']);
-
-        $response = new JsonResponse([
+        $resource = $this->adminRequest->getResourceFromRequest($request);
+        return $this->signatureService->createSignedResponse([
             'actionType' => 'openModal',
             'payload' => [
-                'iframeUrl' => $request->get('shop-url') . '/storefront/script/editor-page?' . http_build_query([
-                    'entity' => $entity,
-                    'entityId' => $id,
-                ]), //$this->generateUrl('editor-page'),
-                'size' => 'medium',
+                'iframeUrl' => str_replace(':8000', '', $this->generateUrl('editor', [
+                    'entity' => $resource['entity'],
+                    'entityId' => $resource['entityId'],
+                ], UrlGeneratorInterface::ABSOLUTE_URL)),
+                'size' => 'fullscreen',
                 'expand' => true
             ]
-        ]);
-
-        $hmac = hash_hmac('sha256', $response->getContent(), $shop->getShopSecret());
-        $response->headers->set('shopware-app-signature', $hmac);
-
-        return $response;
+        ], $resource['appSecret']);
     }
 
-    #[Route('/editor-page', name: 'editor-page', methods: ['GET'])]
-    public function editorPage(Request $request): Response
+    #[Route('/open-in-new-tab', methods: ['POST'])]
+    public function openEditorInNewTab(Request $request): Response
     {
-        $shop = $this->shopRepository->getShopFromId($request->get('shop-id'));
-        $language = $request->get('sw-user-language');
-        $languageShort = substr($language, 0, 2);
-        $languageId = $request->get('sw-context-language');
-        $value = $customFieldsHtml = '';
+        $resource = $this->adminRequest->getResourceFromRequest($request);
+        return $this->signatureService->createSignedResponse([
+            'actionType' => 'openNewTab',
+            'payload' => [
+                'redirectUrl' => str_replace(':8000', '', $this->generateUrl('editor', [
+                    'entity' => $resource['entity'],
+                    'entityId' => $resource['entityId'],
+                ], UrlGeneratorInterface::ABSOLUTE_URL))
+            ]
+        ], $resource['appSecret']);
+    }
 
-        try {
-            $product = $this->adminApi->getProduct($shop, $request->get('entityId'), $languageId);
-            $value = htmlspecialchars($product['description'] ?? '');
-            $customFields = $this->adminApi->getEditorCustomFields($shop, $languageId);
-            foreach ($customFields as $customField) {
-                $label = $customField['config']['label'][$language] ?? $customField['config']['label']['en-GB'];
-                $name = $customField['name'];
-                $customFieldsHtml .= ' <h3>' . htmlspecialchars($label) . '</h3>';
-                $customFieldsHtml .= '<textarea name="' . htmlspecialchars($name) . '">'
-                    . htmlspecialchars($product['customFields'][$name]?? '')
-                    .'</textarea>';
+    #[Route('/editor', name: 'editor', methods: ['GET'])]
+    public function editor(Request $request): Response
+    {
+        $shop = $this->adminRequest->getShopFromRequest($request);
+        $language = $request->query->get('sw-user-language', self::DEFAULT_LANGUAGE);
+        $entity = [];
+
+        if (isset($shop)) {
+            $languageId = $request->query->get('sw-context-language');
+            $entityName = $request->query->get('entity');
+            if ($request->query->has('entityId')) {
+                $entityId = $request->query->get('entityId');
+                $entity = $this->adminApi->getEntity($shop, $languageId, $entityName, $entityId);
             }
-        } catch (\Throwable $e) {
+
+            $form = [
+                'language' => $language,
+                'entityName' => $entityName,
+                'entity' => $entity,
+                'customFields' => $this->adminApi->getEditorCustomFields($shop, $languageId, $entityName),
+            ];
         }
 
-        return new Response(<<<EOT
-<!DOCTYPE html>
-<html>
-<head>
-  <script src="https://cdn.tiny.cloud/1/v9t1p0dfcakgtfn8axp7cdm690a7b30yx89866n2a5hde62p/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
-</head>
-<body>
-  <textarea name="description">$value</textarea>
-  $customFieldsHtml
-  <script>
-    const me = this;
-    const spellcheck = false;
-    const useDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isSmallScreen = window.matchMedia('(max-width: 1023.5px)').matches;
-    const lang = '$languageShort';
-tinymce.init({
-  selector: 'textarea',
-  language: lang,
-  plugins: 'preview powerpaste casechange importcss searchreplace autolink autosave save directionality advcode visualblocks visualchars '
-  + 'fullscreen image link media mediaembed template codesample table charmap pagebreak nonbreaking anchor '
-  + 'tableofcontents insertdatetime advlist lists checklist wordcount tinymcespellchecker a11ychecker editimage help '
-  + 'formatpainter permanentpen pageembed charmap tinycomments mentions quickbars linkchecker emoticons advtable export',
-  menu: {
-    tc: {
-      title: 'Comments',
-      items: 'addcomment showcomments deleteallconversations'
+        return DefaultController::render('Editor', [
+            'language' => $language,
+            'options' => $request->query->get('options'),
+            'entity' => $entity,
+            'form' => $form ?? null,
+            'shopUrl' => $shop?->getUrl() ?: $request->query->get('shop-url'),
+            'sidebarUrl' => $this->getListUrl($request, $shop)
+        ]);
     }
-  },
-  menubar: 'file edit view insert format tools table tc help',
-  toolbar: 'undo redo | bold italic underline strikethrough | fontfamily fontsize blocks | '
-  + 'alignleft aligncenter alignright alignjustify | outdent indent |  numlist bullist checklist | '
-  + 'forecolor backcolor casechange permanentpen formatpainter removeformat | pagebreak | charmap emoticons | '
-  + 'fullscreen  preview save print | insertfile image media pageembed template link anchor codesample | a11ycheck ltr rtl | showcomments addcomment',
-  // toolbar_sticky: true,
-  // autosave_ask_before_unload: true,
-  // autosave_interval: '30s',
-  // autosave_prefix: '{path}{query}-{id}-',
-  // autosave_restore_when_empty: false,
-  // autosave_retention: '2m',
-  image_advtab: true,
-  link_list: [
-    { title: 'My page 1', value: 'https://www.tiny.cloud' },
-    { title: 'My page 2', value: 'http://www.moxiecode.com' }
-  ],
-  image_list: [
-    { title: 'My page 1', value: 'https://www.tiny.cloud' },
-    { title: 'My page 2', value: 'http://www.moxiecode.com' }
-  ],
-  image_class_list: [
-    { title: 'None', value: '' },
-    { title: 'Some class', value: 'class-name' }
-  ],
-  browser_spellcheck: spellcheck,
-  importcss_append: true,
-  templates: [
-    { title: 'New Table', description: 'creates a new table', content: '<div class="mceTmpl"><table width="98%%"  border="0" cellspacing="0" cellpadding="0"><tr><th scope="col"> </th><th scope="col"> </th></tr><tr><td> </td><td> </td></tr></table></div>' },
-    { title: 'Starting my story', description: 'A cure for writers block', content: 'Once upon a time...' },
-    { title: 'New list with dates', description: 'New List with dates', content: '<div class="mceTmpl"><span class="cdate">cdate</span><br><span class="mdate">mdate</span><h2>My List</h2><ul><li></li><li></li></ul></div>' }
-  ],
-  template_cdate_format: '[Date Created (CDATE): %m/%d/%Y : %H:%M:%S]',
-  template_mdate_format: '[Date Modified (MDATE): %m/%d/%Y : %H:%M:%S]',
-  height: 450,
-  image_caption: true,
-  quickbars_selection_toolbar: 'bold italic | quicklink h2 h3 blockquote quickimage quicktable',
-  noneditable_class: 'mceNonEditable',
-  toolbar_mode: 'sliding',
-  spellchecker_ignore_list: ['Ephox', 'Moxiecode'],
-  relative_urls: false,
-  tinycomments_mode: 'embedded',
-  contextmenu: spellcheck ? false : 'link image editimage table configurepermanentpen',
-  a11y_advanced_options: true,
-  skin: useDarkMode ? 'oxide-dark' : 'oxide',
-  content_css: useDarkMode ? 'dark' : 'default',
-  extended_valid_elements: 'script[src|async|defer|type|charset|crossorigin]',
-  file_picker_callback: function (callback, value, meta) {
-    /* Provide file and text for the link dialog */
-    me.mediaModalIsOpen = true;
-    me.filePickerCallback = callback;
-    me.filePickerMeta = meta;
-  },
-});
-  </script>
-</body>
-</html>
-EOT);
+
+    #[Route('/editor', name: 'save', methods: ['POST'])]
+    public function save(Request $request): Response
+    {
+        $this->adminRequest->updateEntityFromRequest($request);
+
+        $uri = AdminRequest::getQueryFromRequest($request);
+
+        $uri = AdminRequest::withQueryArray($uri, 'options', $request->request->get('options') ?? []);
+
+        $uri = $this->signatureService->signQueryWithSignature(
+            $uri,
+            $request->attributes->get(SignatureService::APP_SECRET)
+        );
+
+        return $this->redirect((string)$uri);
+    }
+
+    private function getListUrl(Request $request, ShopEntity $shop): UriInterface
+    {
+        $uri = $request->attributes->get(SignatureService::APP_SIGNATURE);
+        if (!$uri instanceof UriInterface) {
+            throw new \RuntimeException('Request is not verified.');
+        }
+        $uri = Uri::withoutQueryValue($uri, 'entity');
+        $uri = Uri::withoutQueryValue($uri, 'entityId');
+        $uri = $uri->withPath($this->generateUrl('list'));
+
+        return $this->signatureService->signQueryWithSignature($uri, $shop->getShopSecret());
     }
 }

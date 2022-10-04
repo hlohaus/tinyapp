@@ -15,27 +15,33 @@ class ShopRepository implements ShopRepositoryInterface
 
     public function createShop(ShopInterface $shop): void
     {
-        $this->deleteShop($shop);
+        $this->connection->transactional(function() use ($shop) {
+            $this->deleteShop($shop);
 
-        $queryBuilder = $this->connection->createQueryBuilder();
-        $queryBuilder
-            ->insert('shop')
-            ->setValue('shop_id', ':shop_id')
-            ->setValue('shop_url', ':shop_url')
-            ->setValue('shop_secret', ':shop_secret')
-            ->setValue('api_key', ':api_key')
-            ->setValue('secret_key', ':secret_key')
-            ->setParameter('shop_id', $shop->getId())
-            ->setParameter('shop_url', $shop->getUrl())
-            ->setParameter('shop_secret', $shop->getShopSecret())
-            ->setParameter('api_key', $shop->getApiKey())
-            ->setParameter('secret_key', $shop->getSecretKey());
+            $queryBuilder = $this->connection->createQueryBuilder();
+            $queryBuilder
+                ->insert('shop')
+                ->setValue('shop_id', ':shop_id')
+                ->setValue('shop_url', ':shop_url')
+                ->setValue('shop_secret', ':shop_secret')
+                ->setValue('api_key', ':api_key')
+                ->setValue('secret_key', ':secret_key')
+                ->setParameter('shop_id', $shop->getId())
+                ->setParameter('shop_url', $shop->getUrl())
+                ->setParameter('shop_secret', $shop->getShopSecret())
+                ->setParameter('api_key', $shop->getApiKey())
+                ->setParameter('secret_key', $shop->getSecretKey());
 
-        $queryBuilder->execute();
+            $queryBuilder->execute();
+        });
     }
 
-    public function getShopFromId(string $shopId): ShopInterface
+    public function getShopFromId(string $shopId): ShopEntity
     {
+        if (!$shopId) {
+            throw new \RuntimeException('Shop id is empty.');
+        }
+
         $queryBuilder = $this->connection->createQueryBuilder();
         $queryBuilder->select('*')
             ->from('shop')
@@ -43,8 +49,9 @@ class ShopRepository implements ShopRepositoryInterface
             ->setParameter('shop_id', $shopId);
 
         $shop = $queryBuilder->execute()->fetchAssociative();
-
-        $shop['shop_url'] = str_replace('localhost', 'freudenberg', $shop['shop_url']);
+        if (!$shop) {
+            throw new \RuntimeException(sprintf('Shop with id "%s" not found.', $shopId));
+        }
 
         $result = new ShopEntity(
             $shop['shop_id'],

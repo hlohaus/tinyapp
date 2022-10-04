@@ -2,9 +2,9 @@
 
 namespace App\Controller;
 
+use App\Service\SignatureService;
 use Shopware\AppBundle\Attribute\ConfirmationRoute;
 use Shopware\AppBundle\Attribute\RegistrationRoute;
-use Shopware\AppBundle\Authentication\RequestVerifier;
 use Shopware\AppBundle\Shop\ShopRepositoryInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Shopware\AppBundle\Registration\RegistrationService;
@@ -21,7 +21,7 @@ class RegistrationController extends AbstractController
         private RegistrationService $registrationService,
         private HttpMessageFactoryInterface $psrHttpFactory,
         private ShopRepositoryInterface $shopRepository,
-        private RequestVerifier $requestVerifier
+        private SignatureService $signatureService
     ) {
     }
 
@@ -54,10 +54,7 @@ class RegistrationController extends AbstractController
 
         $shop = $this->shopRepository->getShopFromId($requestContent['shopId']);
 
-        $this->requestVerifier->authenticatePostRequest(
-            $this->psrHttpFactory->createRequest($request),
-            $shop
-        );
+        $this->signatureService->verifyRequestContent($request, $shop);
 
         $this->shopRepository->deleteShop($shop);
 
